@@ -2,7 +2,7 @@ from .user_schema import (
     UserBase,
     UserCreate,
     UserUpdate,
-    UserOut,
+    UserResponse,
 )
 from .order_schema import (
     OrderType,
@@ -10,13 +10,12 @@ from .order_schema import (
     OrderBase,
     OrderCreate,
     OrderUpdate,
-    OrderOut,
+    OrderResponse,
 )
 from .trade_schema import (
     TradeBase,
     TradeCreate,
-    TradeUpdate,
-    TradeOut,
+    TradeResponse,
 )
 
 __all__ = [
@@ -24,17 +23,16 @@ __all__ = [
     "UserBase",
     "UserCreate",
     "UserUpdate",
-    "UserOut",
+    "UserResponse",
     # Order
     "OrderType",
     "StatusType",
     "OrderBase",
     "OrderCreate",
     "OrderUpdate",
-    "OrderOut",
+    "OrderResponse",
     # Trade
     "TradeBase",
     "TradeCreate",
-    "TradeUpdate",
-    "TradeOut",
+    "TradeResponse",
 ]

@@ -8,8 +8,8 @@ from sqlalchemy import (
     DateTime,
     Enum,
 )
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, declarative_base
+from sqlalchemy.sql import func
 from datetime import datetime
 import enum
 
@@ -36,7 +36,7 @@ class User(Base):
     username = Column(String(50), unique=True, nullable=False)
     password_hash = Column(String(255), nullable=False)
     role = Column(String(20), default="trader", nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, server_default=func.now())
 
     orders = relationship("Order", back_populates="user")
 
@@ -46,14 +46,16 @@ class Order(Base):
     __tablename__ = "orders"
 
     id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, ForeignKey("users.id"))
-    type = Column(Enum(OrderType), nullable=False)
+    user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    type = Column(Enum(OrderType, native_enum=False), nullable=False)
     order_type = Column(String(20), default="limit")  # 'limit' or 'market'
     price = Column(Float, nullable=True)
     quantity = Column(Float, nullable=False)
-    status = Column(Enum(StatusType), default=StatusType.pending)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    status = Column(Enum(StatusType, native_enum=False), default=StatusType.pending)
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
     user = relationship("User", back_populates="orders")
     buy_trades = relationship(
@@ -63,17 +65,20 @@ class Order(Base):
         "Trade", back_populates="sell_order", foreign_keys="Trade.sell_order_id"
     )
 
+    def __repr__(self):
+        return f"<Order(id={self.id}, type={self.type}, status={self.status})>"
+
 
 # --- Trades Table ---
 class Trade(Base):
     __tablename__ = "trades"
 
     id = Column(Integer, primary_key=True)
-    buy_order_id = Column(Integer, ForeignKey("orders.id"))
-    sell_order_id = Column(Integer, ForeignKey("orders.id"))
+    buy_order_id = Column(Integer, ForeignKey("orders.id"), nullable=False)
+    sell_order_id = Column(Integer, ForeignKey("orders.id"), nullable=False)
     price = Column(Float, nullable=False)
     quantity = Column(Float, nullable=False)
-    executed_at = Column(DateTime, default=datetime.utcnow)
+    executed_at = Column(DateTime, server_default=func.now())
 
     buy_order = relationship(
         "Order", foreign_keys=[buy_order_id], back_populates="buy_trades"

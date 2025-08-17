@@ -2,7 +2,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.routes import users, orders, trades
-from backend.app.websocket import router as ws_router
+from app.websocket import router as ws_router
 
 app = FastAPI(title="Real-Time Trading Platform", version="1.0")
 
@@ -21,6 +21,13 @@ app.include_router(orders.router, prefix="/orders", tags=["Orders"])
 app.include_router(trades.router, prefix="/trades", tags=["Trades"])
 app.include_router(ws_router, prefix="/ws", tags=["WebSocket"])
 
+
 @app.get("/")
 def root():
     return {"message": "Trading platform backend is running."}
+
+
+# Health check endpoint
+@app.get("/health")
+def health():
+    return {"status": "ok"}
