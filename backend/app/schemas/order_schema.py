@@ -1,10 +1,10 @@
+# app/schemas/order_schema.py
 from pydantic import BaseModel
 from datetime import datetime
 from typing import Optional
 from app.db.data_model import OrderType, StatusType
 
 
-# ---- Base ----
 class OrderBase(BaseModel):
     type: OrderType
     order_type: str = "limit"
@@ -12,23 +12,21 @@ class OrderBase(BaseModel):
     quantity: float
 
 
-# ---- Create ----
 class OrderCreate(OrderBase):
     user_id: int
 
 
-# ---- Update ----
 class OrderUpdate(BaseModel):
     price: Optional[float] = None
     quantity: Optional[float] = None
     status: Optional[StatusType] = None
 
 
-# ---- Response ----
 class OrderResponse(OrderBase):
     id: int
     user_id: int
     status: StatusType
+    remaining_quantity: float
     created_at: datetime
     updated_at: datetime
 
