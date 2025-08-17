@@ -1,45 +1,49 @@
+# app/routes/orders.py
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.db import data_model as models
 from app.schemas import order_schema as schemas
 from app.websocket import broadcast_wallet_update
+from app.core import order_matching
 
 router = APIRouter()
 
 
 @router.post("/", response_model=schemas.OrderResponse)
 async def create_order(order: schemas.OrderCreate, db: Session = Depends(get_db)):
+    # Verify user
     user = db.query(models.User).filter(models.User.id == order.user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
+    # Fetch wallet
     wallet = (
         db.query(models.Wallet).filter(models.Wallet.user_id == order.user_id).first()
     )
     if not wallet:
         raise HTTPException(status_code=404, detail="Wallet not found")
 
-    # Reserve funds for BUY orders
-    if order.type == models.OrderType.buy:
+    # Reserve funds for limit BUY
+    if order.type == models.OrderType.buy and order.order_type == "limit":
         if not order.price:
-            raise HTTPException(
-                status_code=400, detail="Price required for limit buy orders"
-            )
+            raise HTTPException(status_code=400, detail="Price required for limit buy")
         total_cost = order.price * order.quantity
         if wallet.balance < total_cost:
-            raise HTTPException(
-                status_code=400, detail="Insufficient balance to place buy order"
-            )
-        wallet.balance -= total_cost  # reserve funds
+            raise HTTPException(status_code=400, detail="Insufficient balance")
+        wallet.balance -= total_cost
+        db.commit()
 
     db_order = models.Order(**order.dict())
     db.add(db_order)
     db.commit()
     db.refresh(db_order)
 
-    # Broadcast wallet update (send both balance and holdings)
-    await broadcast_wallet_update(wallet.user_id, wallet.balance, wallet.holdings)
+    # Broadcast wallet after reserving
+    await broadcast_wallet_update(order.user_id, wallet.balance, holdings=0)
+
+    # Match orders
+    order_matching.match_orders(db, db_order)
 
     return db_order
 
@@ -71,8 +75,6 @@ async def update_order(
     db.commit()
     db.refresh(db_order)
 
-    # Optionally handle wallet updates here if needed
-
     return db_order
 
 
@@ -82,6 +84,7 @@ async def delete_order(order_id: int, db: Session = Depends(get_db)):
     if not db_order:
         raise HTTPException(status_code=404, detail="Order not found")
 
+    # Refund pending BUY
     if (
         db_order.type == models.OrderType.buy
         and db_order.status == models.StatusType.pending
@@ -92,11 +95,8 @@ async def delete_order(order_id: int, db: Session = Depends(get_db)):
             .first()
         )
         if wallet:
-            refund = db_order.price * db_order.quantity
-            wallet.balance += refund
-            await broadcast_wallet_update(
-                wallet.user_id, wallet.balance, wallet.holdings
-            )
+            wallet.balance += db_order.price * db_order.quantity
+            await broadcast_wallet_update(wallet.user_id, wallet.balance, holdings=0)
 
     db.delete(db_order)
     db.commit()

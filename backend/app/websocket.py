@@ -48,9 +48,8 @@ async def websocket_endpoint(websocket: WebSocket):
         await manager.broadcast("A user has disconnected.")
 
 
-# --- Helper functions for broadcasting updates ---
-async def broadcast_wallet_update(user_id: int, balance: float, holdings: float):
-    """Notify all clients about a wallet balance + holdings update."""
+# Updated broadcasting functions
+async def broadcast_wallet_update(user_id: int, balance: float, holdings: float = 0.0):
     await manager.broadcast(
         f"Wallet Update | User {user_id}: Balance = {balance}, Holdings = {holdings}"
     )

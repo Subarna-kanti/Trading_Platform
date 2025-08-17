@@ -93,10 +93,13 @@ class Wallet(Base):
     __tablename__ = "wallets"
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), unique=True)
-    balance = Column(Float, default=0.0)  # cash
-    holdings = Column(Float, default=0.0)  # asset quantity
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    user_id = Column(Integer, ForeignKey("users.id"), unique=True, nullable=False)
+    balance = Column(Float, default=0.0)  # free funds
+    reserved_balance = Column(
+        Float, default=0.0
+    )  # funds reserved for pending BUY orders
+
+    user = relationship("User", back_populates="wallet")
 
 
 # --- Connect to PostgreSQL ---
