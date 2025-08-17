@@ -49,9 +49,11 @@ async def websocket_endpoint(websocket: WebSocket):
 
 
 # --- Helper functions for broadcasting updates ---
-async def broadcast_wallet_update(user_id: int, balance: float):
-    """Notify all clients about a wallet balance update."""
-    await manager.broadcast(f"Wallet Update | User {user_id}: Balance = {balance}")
+async def broadcast_wallet_update(user_id: int, balance: float, holdings: float):
+    """Notify all clients about a wallet balance + holdings update."""
+    await manager.broadcast(
+        f"Wallet Update | User {user_id}: Balance = {balance}, Holdings = {holdings}"
+    )
 
 
 async def broadcast_trade_update(trade_id: int, price: float, quantity: float):

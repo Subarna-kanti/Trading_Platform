@@ -6,6 +6,7 @@ from typing import Optional
 class WalletBase(BaseModel):
     user_id: int
     balance: float = 0.0
+    holdings: float = 0.0  # <-- new field for asset quantity
 
 
 # ---- Create ----
@@ -16,6 +17,7 @@ class WalletCreate(WalletBase):
 # ---- Update ----
 class WalletUpdate(BaseModel):
     balance: Optional[float] = None
+    holdings: Optional[float] = None  # <-- optional update
 
 
 # ---- Response ----

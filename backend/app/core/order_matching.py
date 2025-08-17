@@ -1,124 +1,103 @@
-# app/core/order_matching.py
 from sqlalchemy.orm import Session
-from sqlalchemy import asc, desc
 from app.db import data_model as models
 from app.websocket import broadcast_wallet_update, broadcast_trade_update
 import asyncio
-from typing import List
 
 
-class OrderMatchingEngine:
+async def match_orders(db: Session, new_order: models.Order):
     """
-    Simple matching engine for limit orders.
-    Matches buy orders (highest price first) with sell orders (lowest price first).
+    Match the new order against existing orders.
     """
-
-    def __init__(self, db: Session):
-        self.db = db
-
-    async def match_orders(self) -> List[models.Trade]:
-        trades: List[models.Trade] = []
-
-        # Fetch all pending buy and sell orders
-        buy_orders = (
-            self.db.query(models.Order)
-            .filter(
-                models.Order.type == models.OrderType.buy,
-                models.Order.status == models.StatusType.pending,
-            )
-            .order_by(desc(models.Order.price), models.Order.created_at)
-            .all()
-        )
-        sell_orders = (
-            self.db.query(models.Order)
+    if new_order.type == models.OrderType.buy:
+        opposite_orders = (
+            db.query(models.Order)
             .filter(
                 models.Order.type == models.OrderType.sell,
                 models.Order.status == models.StatusType.pending,
             )
-            .order_by(asc(models.Order.price), models.Order.created_at)
+            .order_by(models.Order.price.asc(), models.Order.created_at.asc())
+            .all()
+        )
+    else:
+        opposite_orders = (
+            db.query(models.Order)
+            .filter(
+                models.Order.type == models.OrderType.buy,
+                models.Order.status == models.StatusType.pending,
+            )
+            .order_by(models.Order.price.desc(), models.Order.created_at.asc())
             .all()
         )
 
-        for buy in buy_orders:
-            for sell in sell_orders:
-                # Match only if buy price >= sell price
-                if buy.price >= sell.price:
-                    # Determine trade quantity
-                    trade_qty = min(buy.quantity, sell.quantity)
-                    trade_price = (
-                        sell.price
-                    )  # Price follows sell order (common convention)
+    for order in opposite_orders:
+        if new_order.status != models.StatusType.pending:
+            break
 
-                    # Create Trade
-                    trade = models.Trade(
-                        buy_order_id=buy.id,
-                        sell_order_id=sell.id,
-                        price=trade_price,
-                        quantity=trade_qty,
-                    )
-                    self.db.add(trade)
+        # Determine if prices match (for limit orders)
+        if new_order.order_type == "limit" and order.order_type == "limit":
+            if new_order.type == models.OrderType.buy and new_order.price < order.price:
+                continue
+            if (
+                new_order.type == models.OrderType.sell
+                and new_order.price > order.price
+            ):
+                continue
 
-                    # Update buy/sell orders
-                    buy.quantity -= trade_qty
-                    sell.quantity -= trade_qty
+        trade_qty = min(new_order.quantity, order.quantity)
+        trade_price = (
+            order.price
+            if order.order_type == "limit"
+            else new_order.price or order.price
+        )
 
-                    if buy.quantity == 0:
-                        buy.status = models.StatusType.executed
-                    if sell.quantity == 0:
-                        sell.status = models.StatusType.executed
+        # Update quantities
+        new_order.quantity -= trade_qty
+        order.quantity -= trade_qty
 
-                    # Update wallets
-                    buyer_wallet = (
-                        self.db.query(models.Wallet)
-                        .filter(models.Wallet.user_id == buy.user_id)
-                        .first()
-                    )
-                    seller_wallet = (
-                        self.db.query(models.Wallet)
-                        .filter(models.Wallet.user_id == sell.user_id)
-                        .first()
-                    )
+        # Mark orders executed if fully filled
+        if new_order.quantity == 0:
+            new_order.status = models.StatusType.executed
+        if order.quantity == 0:
+            order.status = models.StatusType.executed
 
-                    total_cost = trade_price * trade_qty
+        # Update wallets
+        buyer_order = new_order if new_order.type == models.OrderType.buy else order
+        seller_order = new_order if new_order.type == models.OrderType.sell else order
 
-                    if buyer_wallet:
-                        # Buyer's reserved funds decrease only for executed amount
-                        buyer_wallet.balance -= 0  # Already reserved at order creation
-                        # Optionally track holdings if implemented
+        buyer_wallet = (
+            db.query(models.Wallet)
+            .filter(models.Wallet.user_id == buyer_order.user_id)
+            .first()
+        )
+        seller_wallet = (
+            db.query(models.Wallet)
+            .filter(models.Wallet.user_id == seller_order.user_id)
+            .first()
+        )
 
-                    if seller_wallet:
-                        seller_wallet.balance += total_cost  # Seller receives money
+        total_cost = trade_qty * trade_price
+        buyer_wallet.holdings += trade_qty
+        seller_wallet.balance += total_cost
 
-                    self.db.commit()
-                    self.db.refresh(trade)
+        # Save trade
+        trade = models.Trade(
+            buy_order_id=buyer_order.id,
+            sell_order_id=seller_order.id,
+            price=trade_price,
+            quantity=trade_qty,
+        )
+        db.add(trade)
+        db.commit()
+        db.refresh(trade)
 
-                    # Broadcast updates
-                    await broadcast_trade_update(trade.id, trade.price, trade.quantity)
-                    if buyer_wallet:
-                        await broadcast_wallet_update(buy.user_id, buyer_wallet.balance)
-                    if seller_wallet:
-                        await broadcast_wallet_update(
-                            sell.user_id, seller_wallet.balance
-                        )
+        # Broadcast updates
+        await broadcast_wallet_update(
+            buyer_wallet.user_id, buyer_wallet.balance, buyer_wallet.holdings
+        )
+        await broadcast_wallet_update(
+            seller_wallet.user_id, seller_wallet.balance, seller_wallet.holdings
+        )
+        await broadcast_trade_update(trade.id, trade_price, trade_qty)
 
-                    trades.append(trade)
-
-                    # Remove fully executed sell order from loop
-                    if sell.quantity == 0:
-                        sell_orders.remove(sell)
-
-                    # Break if buy fully executed
-                    if buy.quantity == 0:
-                        break
-
-        return trades
-
-
-async def run_matching_loop(db: Session, interval: float = 1.0):
-    """
-    Optional: Background loop that continuously matches orders.
-    """
-    engine = OrderMatchingEngine(db)
-    while True:
-        await engine.match_orders()
-        await asyncio.sleep(interval)
+        # Commit updated orders
+        db.commit()
