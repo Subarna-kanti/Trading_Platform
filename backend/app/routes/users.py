@@ -3,34 +3,37 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.db import data_model as models
 from app.schemas import user_schema as schemas
-from app.websocket import broadcast_wallet_update  # <- new import
+from app.websocket import broadcast_wallet_update  # broadcasting
 
 router = APIRouter()
 
 
 @router.post("/", response_model=schemas.UserResponse)
 async def create_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
-    # check if username exists
-    db_user = db.query(models.User).filter(models.User.username == user.username).first()
-    if db_user:
+    # Check if username exists
+    existing_user = (
+        db.query(models.User).filter(models.User.username == user.username).first()
+    )
+    if existing_user:
         raise HTTPException(status_code=400, detail="Username already exists")
 
+    # Create new user (hashing can be added later)
     new_user = models.User(
         username=user.username,
-        password_hash=user.password,  # ⚠️ hashing to be added
+        password_hash=user.password,  # ⚠️ implement hashing
         role=user.role,
     )
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
 
-    # --- create wallet for new user ---
+    # --- Create wallet for the user ---
     wallet = models.Wallet(user_id=new_user.id, balance=0.0)
     db.add(wallet)
     db.commit()
     db.refresh(wallet)
 
-    # --- broadcast wallet creation event ---
+    # Broadcast wallet creation
     await broadcast_wallet_update(new_user.id, wallet.balance)
 
     return new_user
@@ -43,15 +46,17 @@ def list_users(db: Session = Depends(get_db)):
 
 @router.get("/{user_id}", response_model=schemas.UserResponse)
 def get_user(user_id: int, db: Session = Depends(get_db)):
-    db_user = db.query(models.User).get(user_id)
+    db_user = db.query(models.User).filter(models.User.id == user_id).first()
     if not db_user:
         raise HTTPException(status_code=404, detail="User not found")
     return db_user
 
 
 @router.put("/{user_id}", response_model=schemas.UserResponse)
-async def update_user(user_id: int, user: schemas.UserUpdate, db: Session = Depends(get_db)):
-    db_user = db.query(models.User).get(user_id)
+async def update_user(
+    user_id: int, user: schemas.UserUpdate, db: Session = Depends(get_db)
+):
+    db_user = db.query(models.User).filter(models.User.id == user_id).first()
     if not db_user:
         raise HTTPException(status_code=404, detail="User not found")
 
@@ -61,17 +66,17 @@ async def update_user(user_id: int, user: schemas.UserUpdate, db: Session = Depe
     db.commit()
     db.refresh(db_user)
 
-    # If password/role updates happen, wallet unchanged (no broadcast)
+    # Wallet unchanged; no broadcast needed
     return db_user
 
 
 @router.delete("/{user_id}")
 async def delete_user(user_id: int, db: Session = Depends(get_db)):
-    db_user = db.query(models.User).get(user_id)
+    db_user = db.query(models.User).filter(models.User.id == user_id).first()
     if not db_user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    # delete wallet first
+    # Delete wallet first
     wallet = db.query(models.Wallet).filter(models.Wallet.user_id == user_id).first()
     if wallet:
         db.delete(wallet)
@@ -79,7 +84,7 @@ async def delete_user(user_id: int, db: Session = Depends(get_db)):
     db.delete(db_user)
     db.commit()
 
-    # --- optionally broadcast wallet deletion event ---
+    # Broadcast wallet deletion
     await broadcast_wallet_update(user_id, 0.0)
 
     return {"message": "User and wallet deleted"}

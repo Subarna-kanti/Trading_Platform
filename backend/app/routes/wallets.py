@@ -11,12 +11,14 @@ router = APIRouter()
 @router.post("/", response_model=schemas.WalletResponse)
 async def create_wallet(wallet: schemas.WalletCreate, db: Session = Depends(get_db)):
     # Ensure the user exists
-    user = db.query(models.User).get(wallet.user_id)
+    user = db.query(models.User).filter(models.User.id == wallet.user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
     # Prevent multiple wallets per user
-    existing = db.query(models.Wallet).filter(models.Wallet.user_id == wallet.user_id).first()
+    existing = (
+        db.query(models.Wallet).filter(models.Wallet.user_id == wallet.user_id).first()
+    )
     if existing:
         raise HTTPException(status_code=400, detail="User already has a wallet")
 
@@ -33,15 +35,17 @@ async def create_wallet(wallet: schemas.WalletCreate, db: Session = Depends(get_
 
 @router.get("/{wallet_id}", response_model=schemas.WalletResponse)
 def get_wallet(wallet_id: int, db: Session = Depends(get_db)):
-    db_wallet = db.query(models.Wallet).get(wallet_id)
+    db_wallet = db.query(models.Wallet).filter(models.Wallet.id == wallet_id).first()
     if not db_wallet:
         raise HTTPException(status_code=404, detail="Wallet not found")
     return db_wallet
 
 
 @router.put("/{wallet_id}", response_model=schemas.WalletResponse)
-async def update_wallet(wallet_id: int, wallet: schemas.WalletUpdate, db: Session = Depends(get_db)):
-    db_wallet = db.query(models.Wallet).get(wallet_id)
+async def update_wallet(
+    wallet_id: int, wallet: schemas.WalletUpdate, db: Session = Depends(get_db)
+):
+    db_wallet = db.query(models.Wallet).filter(models.Wallet.id == wallet_id).first()
     if not db_wallet:
         raise HTTPException(status_code=404, detail="Wallet not found")
 
@@ -58,11 +62,16 @@ async def update_wallet(wallet_id: int, wallet: schemas.WalletUpdate, db: Sessio
 
 
 @router.delete("/{wallet_id}")
-def delete_wallet(wallet_id: int, db: Session = Depends(get_db)):
-    db_wallet = db.query(models.Wallet).get(wallet_id)
+async def delete_wallet(wallet_id: int, db: Session = Depends(get_db)):
+    db_wallet = db.query(models.Wallet).filter(models.Wallet.id == wallet_id).first()
     if not db_wallet:
         raise HTTPException(status_code=404, detail="Wallet not found")
 
+    user_id = db_wallet.user_id
     db.delete(db_wallet)
     db.commit()
+
+    # Broadcast wallet deletion (balance = 0)
+    await broadcast_wallet_update(user_id, 0.0)
+
     return {"message": "Wallet deleted"}
