@@ -10,7 +10,6 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import relationship, declarative_base
 from sqlalchemy.sql import func
-from datetime import datetime
 import enum
 
 Base = declarative_base()
@@ -36,7 +35,7 @@ class User(Base):
     username = Column(String(50), unique=True, nullable=False)
     password_hash = Column(String(255), nullable=False)
     role = Column(String(20), default="trader", nullable=False)
-    created_at = Column(DateTime, server_default=func.now())
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     orders = relationship("Order", back_populates="user")
 
@@ -54,8 +53,10 @@ class Order(Base):
     price = Column(Float, nullable=True)
     quantity = Column(Float, nullable=False)
     status = Column(Enum(StatusType, native_enum=False), default=StatusType.pending)
-    created_at = Column(DateTime, server_default=func.now())
-    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
 
     user = relationship("User", back_populates="orders")
     buy_trades = relationship(
@@ -78,7 +79,7 @@ class Trade(Base):
     sell_order_id = Column(Integer, ForeignKey("orders.id"), nullable=False)
     price = Column(Float, nullable=False)
     quantity = Column(Float, nullable=False)
-    executed_at = Column(DateTime, server_default=func.now())
+    executed_at = Column(DateTime(timezone=True), server_default=func.now())
 
     buy_order = relationship(
         "Order", foreign_keys=[buy_order_id], back_populates="buy_trades"
@@ -86,6 +87,16 @@ class Trade(Base):
     sell_order = relationship(
         "Order", foreign_keys=[sell_order_id], back_populates="sell_trades"
     )
+
+
+class Wallet(Base):
+    __tablename__ = "wallets"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), unique=True)
+    balance = Column(Float, default=0.0)  # cash
+    holdings = Column(Float, default=0.0)  # asset quantity
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 
 # --- Connect to PostgreSQL ---

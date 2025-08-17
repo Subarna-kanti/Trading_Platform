@@ -22,15 +22,16 @@ async def create_wallet(wallet: schemas.WalletCreate, db: Session = Depends(get_
     if existing:
         raise HTTPException(status_code=400, detail="User already has a wallet")
 
-    # db_wallet = models.Wallet(**wallet.dict())
-    db_wallet = models.Wallet(user_id=wallet.user_id, balance=wallet.balance or 0.0)
+    db_wallet = models.Wallet(
+        user_id=wallet.user_id,
+        balance=wallet.balance or 0.0,
+        holdings=wallet.holdings or 0.0,
+    )
     db.add(db_wallet)
     db.commit()
     db.refresh(db_wallet)
 
-    # Broadcast initial balance
-    await broadcast_wallet_update(wallet.user_id, db_wallet.balance)
-
+    await broadcast_wallet_update(wallet.user_id, db_wallet.balance, db_wallet.holdings)
     return db_wallet
 
 
@@ -55,10 +56,9 @@ async def update_wallet(
 
     db.commit()
     db.refresh(db_wallet)
-
-    # Broadcast updated balance
-    await broadcast_wallet_update(db_wallet.user_id, db_wallet.balance)
-
+    await broadcast_wallet_update(
+        db_wallet.user_id, db_wallet.balance, db_wallet.holdings
+    )
     return db_wallet
 
 
@@ -71,8 +71,5 @@ async def delete_wallet(wallet_id: int, db: Session = Depends(get_db)):
     user_id = db_wallet.user_id
     db.delete(db_wallet)
     db.commit()
-
-    # Broadcast wallet deletion (balance = 0)
-    await broadcast_wallet_update(user_id, 0.0)
-
+    await broadcast_wallet_update(user_id, 0.0, 0.0)
     return {"message": "Wallet deleted"}
