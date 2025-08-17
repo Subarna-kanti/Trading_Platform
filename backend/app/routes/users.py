@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
+from passlib.context import CryptContext
 from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.db import data_model as models
@@ -17,10 +18,11 @@ async def create_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
     if existing_user:
         raise HTTPException(status_code=400, detail="Username already exists")
 
-    # Create new user (hashing can be added later)
+    # Create new user (hashing can be added later)]
+    pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
     new_user = models.User(
         username=user.username,
-        password_hash=user.password,  # ⚠️ implement hashing
+        password_hash=pwd_context.hash(user.password), ## hashed password
         role=user.role,
     )
     db.add(new_user)

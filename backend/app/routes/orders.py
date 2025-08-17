@@ -41,8 +41,8 @@ async def create_order(order: schemas.OrderCreate, db: Session = Depends(get_db)
     db.refresh(db_order)
 
     # Broadcast wallet update if funds reserved
-    if order.type == models.OrderType.buy:
-        await broadcast_wallet_update(order.user_id, wallet.balance)
+    # if order.type == models.OrderType.buy:
+    await broadcast_wallet_update(order.user_id, wallet.balance) ## broadcast in both sell and buy
 
     return db_order
 

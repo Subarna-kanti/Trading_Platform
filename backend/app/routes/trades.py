@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from app.db.session import get_db
 from app.db import data_model as models
 from app.schemas import trade_schema as schemas
@@ -11,15 +11,33 @@ router = APIRouter()
 @router.post("/", response_model=schemas.TradeResponse)
 async def create_trade(trade: schemas.TradeCreate, db: Session = Depends(get_db)):
     # Validate buy and sell orders
-    buy_order = db.query(models.Order).filter(models.Order.id == trade.buy_order_id).first()
-    sell_order = db.query(models.Order).filter(models.Order.id == trade.sell_order_id).first()
+    buy_order = (
+        db.query(models.Order).filter(models.Order.id == trade.buy_order_id).first()
+    )
+    sell_order = (
+        db.query(models.Order).filter(models.Order.id == trade.sell_order_id).first()
+    )
 
     if not buy_order or not sell_order:
         raise HTTPException(status_code=400, detail="Invalid order IDs")
 
     # Validate wallets
-    buyer_wallet = db.query(models.Wallet).filter(models.Wallet.user_id == buy_order.user_id).first()
-    seller_wallet = db.query(models.Wallet).filter(models.Wallet.user_id == sell_order.user_id).first()
+    # buyer_wallet = db.query(models.Wallet).filter(models.Wallet.user_id == buy_order.user_id).first()
+    # seller_wallet = db.query(models.Wallet).filter(models.Wallet.user_id == sell_order.user_id).first()
+
+    buy_order = (
+        db.query(models.Order)
+        .options(joinedload(models.Order.user))
+        .get(trade.buy_order_id)
+    )
+    sell_order = (
+        db.query(models.Order)
+        .options(joinedload(models.Order.user))
+        .get(trade.sell_order_id)
+    )
+    buyer_wallet = buy_order.user.wallet
+    seller_wallet = sell_order.user.wallet
+
     if not buyer_wallet or not seller_wallet:
         raise HTTPException(status_code=404, detail="Buyer or seller wallet not found")
 

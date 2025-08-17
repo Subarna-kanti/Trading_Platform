@@ -22,7 +22,8 @@ async def create_wallet(wallet: schemas.WalletCreate, db: Session = Depends(get_
     if existing:
         raise HTTPException(status_code=400, detail="User already has a wallet")
 
-    db_wallet = models.Wallet(**wallet.dict())
+    # db_wallet = models.Wallet(**wallet.dict())
+    db_wallet = models.Wallet(user_id=wallet.user_id, balance=wallet.balance or 0.0)
     db.add(db_wallet)
     db.commit()
     db.refresh(db_wallet)
