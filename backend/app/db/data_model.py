@@ -22,7 +22,7 @@ class User(Base):
     __tablename__ = "users"
     id = Column(Integer, primary_key=True)
     username = Column(String, unique=True, nullable=False)
-    wallets = relationship("Wallet", back_populates="user")
+    wallets = relationship("Wallet", back_populates="user", uselist=False)
     orders = relationship("Order", back_populates="user")
 
 
