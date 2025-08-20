@@ -32,12 +32,10 @@ export default function Dashboard() {
     const wsRef = useRef(null);
     const mountedRef = useRef(true);
 
-    // Redirect if no token
     useEffect(() => {
         if (!token) navigate("/login", { replace: true });
     }, [token, navigate]);
 
-    // --- API fetchers ---
     const fetchBackendHealth = async () => {
         try {
             const res = await fetch("http://localhost:8000/health");
@@ -53,10 +51,8 @@ export default function Dashboard() {
     const fetchAllData = async () => {
         setLoading(true);
         try {
-            // First, fetch current user info
             if (!mountedRef.current) return;
 
-            // Fetch other data in parallel
             const ordersData = await getMyOrders(token);
             const walletData = await getMyWallet(token);
             const tradesData = await getMyTrades(token);
@@ -82,7 +78,6 @@ export default function Dashboard() {
         }
     };
 
-    // --- Order actions ---
     const handleCreateOrder = async () => {
         try {
             await createOrder(newOrder, token);
@@ -102,7 +97,6 @@ export default function Dashboard() {
         }
     };
 
-    // --- Wallet actions ---
     const handleTopup = async () => {
         if (topupAmount <= 0) {
             alert("Enter a positive amount");
@@ -127,7 +121,7 @@ export default function Dashboard() {
             setDeductAmount(0);
             fetchAllData();
         } catch (err) {
-            alert("Failed to top-up wallet: " + (err.message || "Unknown error"));
+            alert("Failed to withdraw wallet: " + (err.message || "Unknown error"));
         }
     };
 
@@ -141,7 +135,7 @@ export default function Dashboard() {
             setAssetAddition(0);
             fetchAllData();
         } catch (err) {
-            alert("Failed to add asset in wallet: " + (err.message || "Unknown error"));
+            alert("Failed to add asset: " + (err.message || "Unknown error"));
         }
     }
 
@@ -155,11 +149,10 @@ export default function Dashboard() {
             setAssetReduction(0);
             fetchAllData();
         } catch (err) {
-            alert("Failed to remove asset in wallet: " + (err.message || "Unknown error"));
+            alert("Failed to withdraw asset: " + (err.message || "Unknown error"));
         }
     }
 
-    // --- WebSocket ---
     useEffect(() => {
         mountedRef.current = true;
 
@@ -189,7 +182,6 @@ export default function Dashboard() {
         // eslint-disable-next-line
     }, []);
 
-    // Called by TopNav after logout
     const onLogout = () => {
         setOrders([]);
         setWallet(null);
@@ -199,128 +191,191 @@ export default function Dashboard() {
     };
 
     return (
-        <div>
+        <div className="dashboard">
             <TopNav onLogout={onLogout} />
 
-            <div style={{ padding: "2rem" }}>
-                <h2>Dashboard</h2>
+            <div className="dashboard-container">
+                <h2 className="dashboard-title">Dashboard</h2>
 
-                {!backendAlive && <div style={{ color: "red", marginBottom: 12 }}>{errorMsg}</div>}
+                {!backendAlive && <div className="backend-error">{errorMsg}</div>}
 
                 {loading ? (
-                    <div>Loading data...</div>
+                    <div className="loading">Loading data...</div>
                 ) : (
-                    <>
-                        <Wallet wallet={wallet} />
+                    <div className="grid-container">
+                        {/* Wallet & Wallet Actions */}
+                        <div className="wallet-section card">
+                            <Wallet wallet={wallet} />
 
-                        {/* ✅ Top-up form */}
-                        <div style={{ marginBottom: "1.5rem" }}>
-                            <h3>Top-up Wallet</h3>
-                            <input
-                                type="number"
-                                placeholder="Amount"
-                                value={topupAmount}
-                                onChange={(e) => setTopupAmount(Number(e.target.value))}
-                                style={{ marginRight: "0.5rem" }}
-                            />
-                            <button onClick={handleTopup}>Top Up</button>
+                            <div className="wallet-actions">
+                                <div className="wallet-action">
+                                    <h4>Top-up Wallet</h4>
+                                    <input type="number" placeholder="Amount" value={topupAmount} onChange={(e) => setTopupAmount(Number(e.target.value))} />
+                                    <button onClick={handleTopup}>Top Up</button>
+                                </div>
+                                <div className="wallet-action">
+                                    <h4>Withdraw Wallet</h4>
+                                    <input type="number" placeholder="Amount" value={deductAmount} onChange={(e) => setDeductAmount(Number(e.target.value))} />
+                                    <button onClick={handleDeduction}>Withdraw</button>
+                                </div>
+                                <div className="wallet-action">
+                                    <h4>Add Asset</h4>
+                                    <input type="number" placeholder="Amount" value={addAsset} onChange={(e) => setAssetAddition(Number(e.target.value))} />
+                                    <button onClick={handleAssetAddition}>Add BTC</button>
+                                </div>
+                                <div className="wallet-action">
+                                    <h4>Withdraw Asset</h4>
+                                    <input type="number" placeholder="Amount" value={withdrawAsset} onChange={(e) => setAssetReduction(Number(e.target.value))} />
+                                    <button onClick={handleAssetDeduction}>Withdraw BTC</button>
+                                </div>
+                            </div>
                         </div>
 
-                        <div style={{ marginBottom: "1.5rem" }}>
-                            <h3>Withdraw From Wallet</h3>
-                            <input
-                                type="number"
-                                placeholder="Amount"
-                                value={deductAmount}
-                                onChange={(e) => setDeductAmount(Number(e.target.value))}
-                                style={{ marginRight: "0.5rem" }}
-                            />
-                            <button onClick={handleDeduction}>Withdraw</button>
+                        {/* Order Creation & Orders */}
+                        <div className="orders-section card">
+                            <h3>Create Order</h3>
+                            <div className="order-form">
+                                <select value={newOrder.type} onChange={(e) => setNewOrder({ ...newOrder, type: e.target.value })}>
+                                    <option value="buy">Buy</option>
+                                    <option value="sell">Sell</option>
+                                </select>
+                                <select value={newOrder.order_kind} onChange={(e) => setNewOrder({ ...newOrder, order_kind: e.target.value })}>
+                                    <option value="limit">Limit</option>
+                                    <option value="market">Market</option>
+                                </select>
+                                <input type="number" placeholder="Price" value={newOrder.price} onChange={(e) => setNewOrder({ ...newOrder, price: Number(e.target.value) })} />
+                                <input type="number" placeholder="Quantity" value={newOrder.quantity} onChange={(e) => setNewOrder({ ...newOrder, quantity: Number(e.target.value) })} />
+                                <button onClick={handleCreateOrder}>Place Order</button>
+                            </div>
+
+                            <h3>My Orders</h3>
+                            {orders.length === 0 ? (
+                                <div>No active orders</div>
+                            ) : (
+                                <ul className="orders-list">
+                                    {orders.map((o) => (
+                                        <li key={o.id} className="order-item">
+                                            {o.type.toUpperCase()} {o.quantity} BTC @ {o.price} USD, status: {o.status}, remaining: {o.remaining_quantity}
+                                            <button className="cancel-btn" onClick={() => handleCancelOrder(o.id)}>Cancel</button>
+                                        </li>
+                                    ))}
+                                </ul>
+                            )}
                         </div>
 
-                        {/* ✅ Asset Top-up form */}
-                        <div style={{ marginBottom: "1.5rem" }}>
-                            <h3>Add Asset</h3>
-                            <input
-                                type="number"
-                                placeholder="Amount"
-                                value={addAsset}
-                                onChange={(e) => setAssetAddition(Number(e.target.value))}
-                                style={{ marginRight: "0.5rem" }}
-                            />
-                            <button onClick={handleAssetAddition}>Add BTC</button>
+                        {/* Trades */}
+                        <div className="trades-section card">
+                            <h3>My Trades</h3>
+                            <Trades trades={trades} />
                         </div>
 
-                        <div style={{ marginBottom: "1.5rem" }}>
-                            <h3>Withdraw Asset</h3>
-                            <input
-                                type="number"
-                                placeholder="Amount"
-                                value={withdrawAsset}
-                                onChange={(e) => setAssetReduction(Number(e.target.value))}
-                                style={{ marginRight: "0.5rem" }}
-                            />
-                            <button onClick={handleAssetDeduction}>Withdraw BTC</button>
-                        </div>
-
-
-                        {/* Orders Section */}
-                        <h3>Create Order</h3>
-                        <select
-                            value={newOrder.type}
-                            onChange={(e) => setNewOrder({ ...newOrder, type: e.target.value })}
-                        >
-                            <option value="buy">Buy</option>
-                            <option value="sell">Sell</option>
-                        </select>
-                        <select
-                            value={newOrder.order_kind}
-                            onChange={(e) => setNewOrder({ ...newOrder, order_kind: e.target.value })}
-                        >
-                            <option value="limit">Limit</option>
-                            <option value="market">Market</option>
-                        </select>
-                        <input
-                            type="number"
-                            placeholder="Price"
-                            value={newOrder.price}
-                            onChange={(e) => setNewOrder({ ...newOrder, price: Number(e.target.value) })}
-                        />
-                        <input
-                            type="number"
-                            placeholder="Quantity"
-                            value={newOrder.quantity}
-                            onChange={(e) => setNewOrder({ ...newOrder, quantity: Number(e.target.value) })}
-                        />
-                        <button onClick={handleCreateOrder}>Place Order</button>
-
-                        {/* My Orders */}
-                        <h3>My Orders</h3>
-                        {orders.length === 0 ? (
-                            <div>No active orders</div>
-                        ) : (
-                            <ul>
-                                {orders.map((o) => (
-                                    <li key={o.id}>
-                                        {o.type} {o.quantity} BTC @ {o.price} USD, status: {o.status}, remaining_asset: {o.remaining_quantity}
-                                        <button onClick={() => handleCancelOrder(o.id)}>Cancel</button>
-                                    </li>
+                        {/* Live Updates */}
+                        <div className="live-section card">
+                            <h3>Live Updates</h3>
+                            <ul className="live-messages">
+                                {wsMessages.map((msg, i) => (
+                                    <li key={i}>{msg}</li>
                                 ))}
                             </ul>
-                        )}
-
-                        <h3>My Trades</h3>
-                        <Trades trades={trades} />
-
-                        <h3>Live Updates</h3>
-                        <ul>
-                            {wsMessages.map((msg, i) => (
-                                <li key={i}>{msg}</li>
-                            ))}
-                        </ul>
-                    </>
+                        </div>
+                    </div>
                 )}
             </div>
+
+            {/* Styles */}
+            <style jsx>{`
+                .dashboard-container {
+                    padding: 2rem;
+                }
+                .dashboard-title {
+                    font-size: 2rem;
+                    margin-bottom: 1.5rem;
+                    text-align: center;
+                }
+                .backend-error {
+                    color: red;
+                    margin-bottom: 1rem;
+                    text-align: center;
+                }
+                .grid-container {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+                    gap: 1.5rem;
+                }
+                .card {
+                    background: #1e1e2f;
+                    padding: 1rem;
+                    border-radius: 8px;
+                    color: #fff;
+                    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+                }
+                .wallet-actions {
+                    display: grid;
+                    grid-template-columns: 1fr 1fr;
+                    gap: 0.75rem;
+                    margin-top: 1rem;
+                }
+                .wallet-action h4 {
+                    margin: 0 0 0.25rem 0;
+                    font-size: 0.9rem;
+                }
+                .wallet-action input {
+                    width: 100%;
+                    padding: 0.4rem;
+                    margin-bottom: 0.25rem;
+                    border-radius: 4px;
+                    border: 1px solid #555;
+                    background: #2a2a3c;
+                    color: #fff;
+                }
+                .wallet-action button {
+                    width: 100%;
+                    padding: 0.5rem;
+                    border: none;
+                    border-radius: 4px;
+                    background: #00bfff;
+                    color: #fff;
+                    cursor: pointer;
+                }
+                .wallet-action button:hover {
+                    background: #009acd;
+                }
+                .order-form {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+                    gap: 0.5rem;
+                    margin-bottom: 1rem;
+                }
+                .orders-list, .live-messages {
+                    list-style: none;
+                    padding: 0;
+                    margin: 0;
+                }
+                .order-item {
+                    padding: 0.5rem;
+                    margin-bottom: 0.5rem;
+                    background: #2a2a3c;
+                    border-radius: 4px;
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                }
+                .cancel-btn {
+                    background: #ff4c4c;
+                    border: none;
+                    padding: 0.25rem 0.5rem;
+                    border-radius: 4px;
+                    color: #fff;
+                    cursor: pointer;
+                }
+                .cancel-btn:hover {
+                    background: #cc0000;
+                }
+                .live-section ul {
+                    max-height: 200px;
+                    overflow-y: auto;
+                }
+            `}</style>
         </div>
     );
 }
