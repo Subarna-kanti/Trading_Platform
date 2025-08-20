@@ -1,0 +1,71 @@
+       +-----------------+
+       |   Frontend UI   |
+       |  (React App)    |
+       |-----------------|
+       | - Login/Signup  |
+       | - Wallets       |
+       | - Orders        |
+       | - Trade Feed    |
+       +--------+--------+
+                |
+          REST API Calls
+                |
+                v
+       +-----------------+
+       |   Backend API   |
+       |  (FastAPI)      |
+       |-----------------|
+       | - Auth          |
+       | - Wallets       |
+       | - Orders        |
+       | - Trades        |
+       +--------+--------+
+                |
+        WebSocket Updates
+                |
+                v
+       +-----------------+
+       | Real-time Feed  |
+       | (Orders/Trades) |
+       +--------+--------+
+                |
+                v
+       +-----------------+
+       |   Database      |
+       | (Postgres)      |
+       |-----------------|
+       | - Users         |
+       | - Wallets       |
+       | - Orders        |
+       | - Trades        |
+       +-----------------+
+
+
+
+   ┌───────────────┐           ┌───────────────┐
+   │   API Client  │  HTTP     │   FastAPI     │
+   │ (browser/app) │ ────────> │   Endpoint   │
+   └───────────────┘           └───────────────┘
+                                        │
+                                        │ validates input
+                                        ▼
+                              ┌───────────────────┐
+                              │  Pydantic Model   │
+                              │  (UserCreate /    │
+                              │   UserResponse)   │
+                              └───────────────────┘
+                                        │
+                                        │ maps to DB model
+                                        ▼
+                              ┌───────────────────┐
+                              │ SQLAlchemy Model  │
+                              │    (User)         │
+                              └───────────────────┘
+                                        │
+                                        │ talks to
+                                        ▼
+                              ┌───────────────────┐
+                              │     Database      │
+                              │   (Postgres/MySQL)│
+                              └───────────────────┘
+

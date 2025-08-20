@@ -1,66 +1,127 @@
-# app/routes/wallets.py
+# app/api/routes/wallet.py
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from decimal import Decimal
+
 from app.db.session import get_db
 from app.db import data_model as models
-from app.schemas import wallet_schema as schemas
-from app.websocket import broadcast_wallet_update
+from app.schemas.wallet_schema import WalletResponse
+from app.auth import get_current_user
 
 router = APIRouter()
 
 
-@router.post("/", response_model=schemas.WalletResponse)
-async def create_wallet(wallet: schemas.WalletCreate, db: Session = Depends(get_db)):
-    user = db.query(models.User).filter(models.User.id == wallet.user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-
-    existing = db.query(models.Wallet).filter(models.Wallet.user_id == wallet.user_id).first()
-    if existing:
-        raise HTTPException(status_code=400, detail="User already has a wallet")
-
-    db_wallet = models.Wallet(user_id=wallet.user_id, balance=wallet.balance or 0.0)
-    db.add(db_wallet)
-    db.commit()
-    db.refresh(db_wallet)
-
-    await broadcast_wallet_update(wallet.user_id, db_wallet.balance, holdings=0)
-    return db_wallet
-
-
-@router.get("/{wallet_id}", response_model=schemas.WalletResponse)
-def get_wallet(wallet_id: int, db: Session = Depends(get_db)):
-    db_wallet = db.query(models.Wallet).filter(models.Wallet.id == wallet_id).first()
-    if not db_wallet:
+# ---- Get current user's wallet info ----
+@router.get("/me", response_model=WalletResponse)
+def get_my_wallet(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    wallet = (
+        db.query(models.Wallet).filter(models.Wallet.user_id == current_user.id).first()
+    )
+    if not wallet:
         raise HTTPException(status_code=404, detail="Wallet not found")
-    return db_wallet
+    return wallet
 
 
-@router.put("/{wallet_id}", response_model=schemas.WalletResponse)
-async def update_wallet(wallet_id: int, wallet: schemas.WalletUpdate, db: Session = Depends(get_db)):
-    db_wallet = db.query(models.Wallet).filter(models.Wallet.id == wallet_id).first()
-    if not db_wallet:
+# ---- Top-up wallet balance ----
+@router.post("/topup")
+async def topup_wallet(
+    amount: Decimal,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    if amount <= 0:
+        raise HTTPException(status_code=400, detail="Amount must be positive")
+
+    wallet = (
+        db.query(models.Wallet).filter(models.Wallet.user_id == current_user.id).first()
+    )
+    if not wallet:
         raise HTTPException(status_code=404, detail="Wallet not found")
 
-    for field, value in wallet.dict(exclude_unset=True).items():
-        setattr(db_wallet, field, value)
-
+    wallet.balance += float(amount)
     db.commit()
-    db.refresh(db_wallet)
+    db.refresh(wallet)
 
-    await broadcast_wallet_update(db_wallet.user_id, db_wallet.balance, holdings=0)
-    return db_wallet
+    return {"message": f"Wallet topped up by {amount}", "balance": wallet.balance}
 
 
-@router.delete("/{wallet_id}")
-async def delete_wallet(wallet_id: int, db: Session = Depends(get_db)):
-    db_wallet = db.query(models.Wallet).filter(models.Wallet.id == wallet_id).first()
-    if not db_wallet:
+# ---- Deduct wallet balance ----
+@router.post("/deduct")
+async def deduct_wallet(
+    amount: Decimal,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    if amount <= 0:
+        raise HTTPException(status_code=400, detail="Amount must be positive")
+
+    wallet = (
+        db.query(models.Wallet).filter(models.Wallet.user_id == current_user.id).first()
+    )
+    if not wallet:
+        raise HTTPException(status_code=404, detail="Wallet not found")
+    if wallet.balance < float(amount):
+        raise HTTPException(status_code=400, detail="Insufficient balance")
+
+    wallet.balance -= float(amount)
+    db.commit()
+    db.refresh(wallet)
+
+    return {"message": f"Wallet deducted by {amount}", "balance": wallet.balance}
+
+
+# ---- Add BTC holdings ----
+@router.post("/add_btc")
+async def add_btc(
+    quantity: Decimal,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    if quantity <= 0:
+        raise HTTPException(status_code=400, detail="Quantity must be positive")
+
+    wallet = (
+        db.query(models.Wallet).filter(models.Wallet.user_id == current_user.id).first()
+    )
+    if not wallet:
         raise HTTPException(status_code=404, detail="Wallet not found")
 
-    user_id = db_wallet.user_id
-    db.delete(db_wallet)
+    wallet.holdings += float(quantity)
     db.commit()
+    db.refresh(wallet)
 
-    await broadcast_wallet_update(user_id, 0.0, holdings=0)
-    return {"message": "Wallet deleted"}
+    return {
+        "message": f"Added Wallet holdings by {quantity} BTC",
+        "holdings": wallet.holdings,
+    }
+
+
+# ---- Withdraw BTC holdings ----
+@router.post("/withdraw_btc")
+async def withdraw_btc(
+    quantity: Decimal,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    if quantity <= 0:
+        raise HTTPException(status_code=400, detail="Quantity must be positive")
+
+    wallet = (
+        db.query(models.Wallet).filter(models.Wallet.user_id == current_user.id).first()
+    )
+    if not wallet:
+        raise HTTPException(status_code=404, detail="Wallet not found")
+    if wallet.holdings < float(quantity):
+        raise HTTPException(status_code=400, detail="Insufficient Assets")
+
+    wallet.holdings -= float(quantity)
+    db.commit()
+    db.refresh(wallet)
+
+    return {
+        "message": f"Added Wallet holdings by {quantity} BTC",
+        "holdings": wallet.holdings,
+    }

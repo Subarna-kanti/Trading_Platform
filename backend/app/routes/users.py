@@ -1,92 +1,180 @@
-from fastapi import APIRouter, Depends, HTTPException
-from passlib.context import CryptContext
+# app/api/routes/users.py
+import re
+from fastapi import APIRouter, Depends, HTTPException, status, Response
 from sqlalchemy.orm import Session
+
 from app.db.session import get_db
 from app.db import data_model as models
 from app.schemas import user_schema as schemas
-from app.websocket import broadcast_wallet_update  # broadcasting
+from app.auth import get_current_user, get_current_admin
+from app.core.security import get_password_hash
 
 router = APIRouter()
 
 
-@router.post("/", response_model=schemas.UserResponse)
-async def create_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
-    # Check if username exists
-    existing_user = (
-        db.query(models.User).filter(models.User.username == user.username).first()
-    )
-    if existing_user:
-        raise HTTPException(status_code=400, detail="Username already exists")
+# ---- Helper functions ----
+def validate_email(email: str):
+    pattern = r"^[\w\.-]+@[\w\.-]+\.\w+$"
+    if not re.match(pattern, email):
+        raise HTTPException(status_code=400, detail="Invalid email format")
 
-    # Create new user (hashing can be added later)]
-    pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+def validate_password(password: str):
+    if len(password) < 8:
+        raise HTTPException(
+            status_code=400, detail="Password must be at least 8 characters long"
+        )
+    if not re.search(r"[A-Z]", password):
+        raise HTTPException(
+            status_code=400,
+            detail="Password must contain at least one uppercase letter",
+        )
+    if not re.search(r"[a-z]", password):
+        raise HTTPException(
+            status_code=400,
+            detail="Password must contain at least one lowercase letter",
+        )
+    if not re.search(r"[0-9]", password):
+        raise HTTPException(
+            status_code=400, detail="Password must contain at least one number"
+        )
+    if not re.search(r"[!@#$%^&*(),.?\":{}|<>]", password):
+        raise HTTPException(
+            status_code=400,
+            detail="Password must contain at least one special character",
+        )
+
+
+# ---- Create user (admin only) ----
+@router.post("/", response_model=schemas.UserResponse)
+async def create_user(
+    user: schemas.UserCreate,
+    current_admin: models.User = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    if db.query(models.User).filter(models.User.username == user.username).first():
+        raise HTTPException(status_code=400, detail="Username already exists")
+    if db.query(models.User).filter(models.User.email == user.email).first():
+        raise HTTPException(status_code=400, detail="Email already exists")
+
+    validate_email(user.email)
+    validate_password(user.password)
+
     new_user = models.User(
         username=user.username,
-        password_hash=pwd_context.hash(user.password), ## hashed password
+        email=user.email,
+        hashed_password=get_password_hash(user.password),
         role=user.role,
     )
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
 
-    # --- Create wallet for the user ---
     wallet = models.Wallet(user_id=new_user.id, balance=0.0)
     db.add(wallet)
     db.commit()
     db.refresh(wallet)
 
-    # Broadcast wallet creation
-    await broadcast_wallet_update(new_user.id, wallet.balance)
-
     return new_user
 
 
+# ---- List users (admin only) ----
 @router.get("/", response_model=list[schemas.UserResponse])
-def list_users(db: Session = Depends(get_db)):
+def list_users(
+    current_admin: models.User = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
     return db.query(models.User).all()
 
 
-@router.get("/{user_id}", response_model=schemas.UserResponse)
-def get_user(user_id: int, db: Session = Depends(get_db)):
-    db_user = db.query(models.User).filter(models.User.id == user_id).first()
-    if not db_user:
-        raise HTTPException(status_code=404, detail="User not found")
-    return db_user
+# ---- Get current user info (auto-refresh) ----
+@router.get("/me", response_model=schemas.UserResponse)
+def get_me(
+    response: Response,
+    current_user: models.User = Depends(get_current_user),
+):
+    # Attach new access token if auto-refreshed
+    if hasattr(current_user, "new_access_token"):
+        response.headers["X-New-Access-Token"] = current_user.new_access_token
+    return current_user
 
 
-@router.put("/{user_id}", response_model=schemas.UserResponse)
+# ---- Update current user's own info (auto-refresh) ----
+@router.put("/me", response_model=schemas.UserResponse)
+async def update_me(
+    user_update: schemas.UserSelfUpdate,
+    response: Response,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    update_data = user_update.model_dump(exclude_unset=True)
+
+    if "password" in update_data:
+        validate_password(update_data["password"])
+        current_user.hashed_password = get_password_hash(update_data.pop("password"))
+    if "username" in update_data:
+        if (
+            db.query(models.User)
+            .filter(models.User.username == update_data["username"])
+            .first()
+        ):
+            raise HTTPException(status_code=400, detail="Username already exists")
+        current_user.username = update_data.pop("username")
+    if "email" in update_data:
+        validate_email(update_data["email"])
+        current_user.email = update_data.pop("email")
+
+    db.commit()
+    db.refresh(current_user)
+
+    if hasattr(current_user, "new_access_token"):
+        response.headers["X-New-Access-Token"] = current_user.new_access_token
+
+    return current_user
+
+
+# ---- Update user (admin only) ----
+@router.put("/update/{user_id}", response_model=schemas.UserResponse)
 async def update_user(
-    user_id: int, user: schemas.UserUpdate, db: Session = Depends(get_db)
+    user_id: int,
+    user: schemas.UserUpdate,
+    current_admin: models.User = Depends(get_current_admin),
+    db: Session = Depends(get_db),
 ):
     db_user = db.query(models.User).filter(models.User.id == user_id).first()
     if not db_user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    for field, value in user.dict(exclude_unset=True).items():
+    update_data = user.model_dump(exclude_unset=True)
+    if "password" in update_data:
+        validate_password(update_data["password"])
+        db_user.hashed_password = get_password_hash(update_data.pop("password"))
+    if "email" in update_data:
+        validate_email(update_data["email"])
+
+    for field, value in update_data.items():
         setattr(db_user, field, value)
 
     db.commit()
     db.refresh(db_user)
-
-    # Wallet unchanged; no broadcast needed
     return db_user
 
 
+# ---- Delete user (admin only) ----
 @router.delete("/{user_id}")
-async def delete_user(user_id: int, db: Session = Depends(get_db)):
+async def delete_user(
+    user_id: int,
+    current_admin: models.User = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
     db_user = db.query(models.User).filter(models.User.id == user_id).first()
     if not db_user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    # Delete wallet first
     wallet = db.query(models.Wallet).filter(models.Wallet.user_id == user_id).first()
     if wallet:
         db.delete(wallet)
 
     db.delete(db_user)
     db.commit()
-
-    # Broadcast wallet deletion
-    await broadcast_wallet_update(user_id, 0.0)
-
     return {"message": "User and wallet deleted"}

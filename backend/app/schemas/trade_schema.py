@@ -1,24 +1,30 @@
 from pydantic import BaseModel
 from datetime import datetime
+from app.schemas.user_schema import UserBasic
 
 
 # ---- Base ----
 class TradeBase(BaseModel):
-    buy_order_id: int
-    sell_order_id: int
     price: float
     quantity: float
 
 
 # ---- Create ----
 class TradeCreate(TradeBase):
-    pass
+    buy_order_id: str
+    sell_order_id: str
 
 
-# ---- Response ----
+# ---- Full Response (with nested buyer/seller) ----
 class TradeResponse(TradeBase):
-    id: int
-    executed_at: datetime
+    id: str
+    buy_order_id: str
+    sell_order_id: str
+    created_at: datetime
 
-    class Config:
-        from_attributes = True
+    # Nested buyer/seller (lightweight, avoids full order nesting)
+    buyer: UserBasic
+    seller: UserBasic
+
+    model_config = {"from_attributes": True}
+

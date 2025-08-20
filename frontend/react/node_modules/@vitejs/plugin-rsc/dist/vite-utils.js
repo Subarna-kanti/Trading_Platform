@@ -1,3 +1,0 @@
-import { FS_PREFIX, NULL_BYTE_PLACEHOLDER, VALID_ID_PREFIX, cleanUrl, injectQuery, joinUrlSegments, normalizeResolvedIdToUrl, normalizeViteImportAnalysisUrl, slash, splitFileAndPostfix, unwrapId, withTrailingSlash, wrapId } from "./vite-utils-CcqBE-C4.js";
-
-export { FS_PREFIX, NULL_BYTE_PLACEHOLDER, VALID_ID_PREFIX, cleanUrl, injectQuery, joinUrlSegments, normalizeResolvedIdToUrl, normalizeViteImportAnalysisUrl, slash, splitFileAndPostfix, unwrapId, withTrailingSlash, wrapId };
