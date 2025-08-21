@@ -2,10 +2,14 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
 from typing import Generator
-from app.db.data_model import Base
+
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
 
 # --- Database URL ---
-DATABASE_URL = "postgresql+psycopg2://trading_user:trade@localhost/trading_platform"
+DATABASE_URL = os.environ.get("DATABASE_URL")
 
 # --- SQLAlchemy Engine ---
 engine = create_engine(

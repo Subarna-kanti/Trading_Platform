@@ -8,9 +8,7 @@ services:
     ports:
       - "8000:8000"
     env_file:
-      - ./backend/.env
-    volumes:
-      - ./backend:/app
+      - ./backend/.env.prod
     depends_on:
       - db
 
@@ -19,7 +17,7 @@ services:
       context: ./frontend
     container_name: trading_frontend
     ports:
-      - "5173:5173"
+      - "5173:80"
     depends_on:
       - backend
 
@@ -28,11 +26,11 @@ services:
     container_name: trading_db
     restart: always
     environment:
-      POSTGRES_USER: postgres
+      POSTGRES_USER: trading_user
       POSTGRES_PASSWORD: trade
-      POSTGRES_DB: trading
+      POSTGRES_DB: trading_platform
     volumes:
-      - ./postgres_data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql/data
 
 volumes:
   postgres_data:

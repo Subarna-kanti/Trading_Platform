@@ -104,6 +104,16 @@ Trading_Platform/
 
 ---
 
+---
+
+## Application Screenshots
+[Dashboard Pages](docs/dashboard_pages)
+
+[Auth Pages](docs/login_signup_pages)
+
+---
+
+
 ## 🎯 Features
 
 * **Real-Time Dashboard:** Live order book, trades, and wallet balance
@@ -134,7 +144,7 @@ docker-compose up --build
 3. **Access app:**
 
 * Frontend: [http://localhost:5173](http://localhost:5173)
-* Backend API: [http://localhost:8000](http://localhost:8000)
+* Backend Open API: [http://localhost:8000/docs](http://localhost:8000/docs)
 
 ---
 
@@ -155,14 +165,6 @@ cd backend
 pip install -r requirements.txt
 uvicorn app.main:app --reload
 ```
-
-**.env configuration:**
-
-```env
-DATABASE_URL=postgresql+psycopg2://trading_user:trade@db:5432/trading_platform
-```
-
----
 
 ## ⚡ Scope for Improvement
 

@@ -13,6 +13,7 @@ COPY index.html ./
 COPY vite.config.js ./
 COPY src ./src
 COPY public ./public
+COPY .env .
 
 # Build the production bundle
 RUN npm run build
@@ -23,8 +24,8 @@ FROM nginx:alpine
 # Copy built files from builder
 COPY --from=builder /app/dist /usr/share/nginx/html
 
-# Copy custom nginx config if needed (optional)
-# COPY nginx.conf /etc/nginx/nginx.conf
+# Copy custom Nginx config
+COPY nginx.conf /etc/nginx/conf.d/default.conf
 
 # Expose port 80
 EXPOSE 80
