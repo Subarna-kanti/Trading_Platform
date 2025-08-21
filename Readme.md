@@ -108,7 +108,7 @@ Trading_Platform/
 ---
 
 ## 📈 Architecture Diagram
-![Architecture Diagram](./docs/architecture_diagram.svg)
+![Architecture Diagram](docs/tech_architecture.png)
 
 > The above diagram shows **frontend → backend → database flow**, including WebSocket and core services.
 
