@@ -1,0 +1,117 @@
+/* Remove global html, body reset */
+html, body {
+    margin: 0;
+    padding: 0;
+    background: none;  /* prevents white background */
+    height: 100%;      /* ensure no extra white gaps */
+    overflow: hidden;  /* disables unnecessary scrollbars */
+}
+
+/* Profile Page Container */
+.profile-container {
+    min-height: 100vh;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    background: linear-gradient(135deg, #1e1e2f, #2a2a3c);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    overflow-y: auto; /* allows scrolling only inside this page */
+    overflow-x: hidden;
+}
+
+/* Top Navigation Bar */
+.profile-container .top-bar {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    padding: 1rem 2rem;
+    background: #151522;
+    color: #fff;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+}
+
+.profile-container .home-icon {
+    font-size: 1.5rem;
+    cursor: pointer;
+    margin-right: 1rem;
+    transition: transform 0.2s ease;
+}
+
+.profile-container .home-icon:hover {
+    transform: scale(1.1);
+}
+
+.profile-container .top-bar h1 {
+    font-size: 1.2rem;
+    margin: 0;
+}
+
+/* Profile Card */
+.profile-container .profile-card {
+    background: #1e1e2f;
+    padding: 2rem;
+    margin-top: 2rem;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+    color: #fff;
+    width: 100%;
+    max-width: 420px;
+}
+
+.profile-container .profile-card h2 {
+    margin-bottom: 1rem;
+    text-align: center;
+}
+
+/* Message */
+.profile-container .message {
+    text-align: center;
+    margin-bottom: 1rem;
+    font-size: 0.95rem;
+}
+
+/* Form */
+.profile-container .profile-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.profile-container .profile-form label {
+    font-size: 0.9rem;
+    color: #ccc;
+}
+
+.profile-container .profile-form input {
+    padding: 0.7rem;
+    border-radius: 6px;
+    border: 1px solid #333; /* ✅ prevents white border */
+    background: #2a2a3c;
+    color: #fff;
+    font-size: 1rem;
+    outline: none;
+}
+
+.profile-container .profile-form input:focus {
+    border: 1px solid #00bfff;
+    box-shadow: 0 0 4px rgba(0, 191, 255, 0.5);
+}
+
+/* Button */
+.profile-container button {
+    padding: 0.8rem;
+    background: #00bfff;
+    border: none;
+    border-radius: 8px;
+    color: #fff;
+    font-size: 1rem;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background 0.3s ease;
+}
+
+.profile-container button:hover {
+    background: #009acd;
+}

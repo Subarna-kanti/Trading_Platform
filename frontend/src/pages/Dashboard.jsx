@@ -10,6 +10,7 @@ import { getCurrentUser } from "../api/users";
 import Wallet from "../components/Wallet";
 import Trades from "../components/Trades";
 import TopNav from "../components/TopNav";
+import "../styles/dashboard.css"
 
 export default function Dashboard() {
     const [orders, setOrders] = useState([]);
@@ -270,112 +271,113 @@ export default function Dashboard() {
                         </div>
 
                         {/* Live Updates */}
+                        {/* Live Updates */}
                         <div className="live-section card">
                             <h3>Live Updates</h3>
-                            <ul className="live-messages">
-                                {wsMessages.map((msg, i) => (
-                                    <li key={i}>{msg}</li>
-                                ))}
-                            </ul>
+                            <div className="live-updates-container">
+                                {wsMessages.map((msg, i) => {
+                                    try {
+                                        if (msg.startsWith("Order Book Update:")) {
+                                            const raw = msg.replace("Order Book Update: ", "");
+                                            const data = JSON.parse(raw);
+
+                                            return (
+                                                <div key={i} className="live-card">
+                                                    <strong>📘 Order Book Update:</strong>
+                                                    <div className="orders-grid">
+                                                        <div>
+                                                            <h4>Buy Orders</h4>
+                                                            <table className="orders-table">
+                                                                <thead>
+                                                                    <tr>
+                                                                        <th>Price (USD)</th>
+                                                                        <th>Quantity (BTC)</th>
+                                                                        <th>Type</th>
+                                                                    </tr>
+                                                                </thead>
+                                                                <tbody>
+                                                                    {data.buy_orders?.map((o, idx) => (
+                                                                        <tr key={idx}>
+                                                                            <td>{o.price}</td>
+                                                                            <td>{o.remaining_quantity}</td>
+                                                                            <td>{o.order_kind}</td>
+                                                                        </tr>
+                                                                    ))}
+                                                                </tbody>
+                                                            </table>
+                                                        </div>
+                                                        <div>
+                                                            <h4>Sell Orders</h4>
+                                                            <table className="orders-table">
+                                                                <thead>
+                                                                    <tr>
+                                                                        <th>Price (USD)</th>
+                                                                        <th>Quantity (BTC)</th>
+                                                                        <th>Type</th>
+                                                                    </tr>
+                                                                </thead>
+                                                                <tbody>
+                                                                    {data.sell_orders?.map((o, idx) => (
+                                                                        <tr key={idx}>
+                                                                            <td>{o.price}</td>
+                                                                            <td>{o.remaining_quantity}</td>
+                                                                            <td>{o.order_kind}</td>
+                                                                        </tr>
+                                                                    ))}
+                                                                </tbody>
+                                                            </table>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            );
+                                        } else if (msg.startsWith("Trade Book Update:")) {
+                                            const raw = msg.replace("Trade Book Update: ", "");
+                                            const data = JSON.parse(raw);
+
+                                            return (
+                                                <div key={i} className="live-card">
+                                                    <strong>💹 Trade Executed:</strong>
+                                                    <table className="trades-table">
+                                                        <thead>
+                                                            <tr>
+                                                                <th>Quantity (BTC)</th>
+                                                                <th>Price (USD)</th>
+                                                                <th>Total</th>
+                                                                <th>Time</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            {data.map((t, idx) => (
+                                                                <tr key={idx}>
+                                                                    <td>{t.quantity}</td>
+                                                                    <td>{t.price}</td>
+                                                                    <td>{t.total_amount}</td>
+                                                                    <td>{new Date(t.created_at).toLocaleTimeString()}</td>
+                                                                </tr>
+                                                            ))}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            );
+                                        } else if (msg.startsWith("Wallet Update")) {
+                                            return <div key={i} className="live-card">💰 {msg}</div>;
+                                        } else {
+                                            // fallback for non-JSON messages
+                                            return <div key={i} className="live-card">🔔 {msg}</div>;
+                                        }
+                                    } catch (err) {
+                                        // if parsing fails, show the raw msg
+                                        console.log(msg)
+                                        return <div key={i} className="live-card">⚠️ {msg}</div>;
+                                    }
+                                })}
+                            </div>
                         </div>
+
                     </div>
                 )}
             </div>
-
-            {/* Styles */}
-            <style jsx>{`
-                .dashboard-container {
-                    padding: 2rem;
-                }
-                .dashboard-title {
-                    font-size: 2rem;
-                    margin-bottom: 1.5rem;
-                    text-align: center;
-                }
-                .backend-error {
-                    color: red;
-                    margin-bottom: 1rem;
-                    text-align: center;
-                }
-                .grid-container {
-                    display: grid;
-                    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-                    gap: 1.5rem;
-                }
-                .card {
-                    background: #1e1e2f;
-                    padding: 1rem;
-                    border-radius: 8px;
-                    color: #fff;
-                    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
-                }
-                .wallet-actions {
-                    display: grid;
-                    grid-template-columns: 1fr 1fr;
-                    gap: 0.75rem;
-                    margin-top: 1rem;
-                }
-                .wallet-action h4 {
-                    margin: 0 0 0.25rem 0;
-                    font-size: 0.9rem;
-                }
-                .wallet-action input {
-                    width: 100%;
-                    padding: 0.4rem;
-                    margin-bottom: 0.25rem;
-                    border-radius: 4px;
-                    border: 1px solid #555;
-                    background: #2a2a3c;
-                    color: #fff;
-                }
-                .wallet-action button {
-                    width: 100%;
-                    padding: 0.5rem;
-                    border: none;
-                    border-radius: 4px;
-                    background: #00bfff;
-                    color: #fff;
-                    cursor: pointer;
-                }
-                .wallet-action button:hover {
-                    background: #009acd;
-                }
-                .order-form {
-                    display: grid;
-                    grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
-                    gap: 0.5rem;
-                    margin-bottom: 1rem;
-                }
-                .orders-list, .live-messages {
-                    list-style: none;
-                    padding: 0;
-                    margin: 0;
-                }
-                .order-item {
-                    padding: 0.5rem;
-                    margin-bottom: 0.5rem;
-                    background: #2a2a3c;
-                    border-radius: 4px;
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                }
-                .cancel-btn {
-                    background: #ff4c4c;
-                    border: none;
-                    padding: 0.25rem 0.5rem;
-                    border-radius: 4px;
-                    color: #fff;
-                    cursor: pointer;
-                }
-                .cancel-btn:hover {
-                    background: #cc0000;
-                }
-                .live-section ul {
-                    max-height: 200px;
-                    overflow-y: auto;
-                }
-            `}</style>
         </div>
     );
 }
+

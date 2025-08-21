@@ -1,4 +1,5 @@
 import asyncio
+import json
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
 from typing import Dict, List
 from jose import jwt, JWTError
@@ -96,10 +97,14 @@ async def websocket_endpoint(websocket: WebSocket, token: str = Query(...)):
     # Broadcast the current order book to this new client
     db = next(get_db())
     order_book = get_order_book_snapshot(db)
-    await manager.send_personal_message(f"Order Book Update: {order_book}", websocket)
+    await manager.send_personal_message(
+        f"Order Book Update: {json.dumps(order_book)}", websocket
+    )
 
     trade_book = get_trade_snapshot(db)
-    await manager.send_personal_message(f"Trade Book Update: {trade_book}", websocket)
+    await manager.send_personal_message(
+        f"Trade Book Update: {json.dumps(trade_book)}", websocket
+    )
 
     try:
         while True:
@@ -115,4 +120,3 @@ async def websocket_endpoint(websocket: WebSocket, token: str = Query(...)):
     finally:
         manager.disconnect(websocket, user_id)
         await manager.broadcast(f"User {user_id} disconnected.")
-

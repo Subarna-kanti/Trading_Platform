@@ -71,17 +71,15 @@ def _execution_price(new_order: models.Order, opp: models.Order) -> Decimal:
 
 def match_orders(db: Session, new_order: models.Order):
     """
-    Match a newly inserted order against the opposite side atomically and safely.
-    Assumes the order has already reserved funds/holdings at placement time.
+    Scan the whole opposite order book once for this new_order.
+    Match as much as possible in price-time priority.
     """
 
-    # We collect async broadcasts to run after commit
     wallet_broadcasts = []
     trade_broadcasts = []
     executed_trades = []
-    order_book_broadcast = None
 
-    # Lock the new order row to stabilize its state during matching
+    # Lock the new order row
     new_order = (
         db.query(models.Order)
         .filter(models.Order.id == new_order.id)
@@ -89,45 +87,39 @@ def match_orders(db: Session, new_order: models.Order):
         .one()
     )
 
-    # Keep matching while we still have quantity
-    while (
-        new_order.status == models.StatusType.pending
-        and new_order.remaining_quantity > 0
-    ):
-        # Fetch the single best opposite order with row lock
-        opp = _best_opposite_query(db, new_order.type).first()
-        if not opp:
-            break  # no liquidity on the other side
+    # Fetch ALL opposite orders in priority order
+    opposite_orders = _best_opposite_query(db, new_order.type).all()
 
-        # If both are market or prices don’t cross, skip this opposite and exit
+    for opp in opposite_orders:
+        if (
+            new_order.status != models.StatusType.pending
+            or new_order.remaining_quantity <= 0
+        ):
+            break  # new_order fully executed
+
+        # Price compatibility check
         if not _compatible_prices(new_order, opp):
-            # If both are limit but don't cross, no further matches possible
-            nk = getattr(new_order, "order_kind", "limit")
-            ok = getattr(opp, "order_kind", "limit")
-            if nk == "limit" and ok == "limit":
-                break
-            # If both market was the case, also break because incompatible
-            break
+            break  # since book is sorted, no further orders can match
 
-        # Determine trade quantity and price
+        # Skip self-trade (important: break, don’t continue → avoids infinite loop)
+        if new_order.user_id == opp.user_id:
+            continue
+
         trade_qty = min(
             Decimal(str(new_order.remaining_quantity)),
             Decimal(str(opp.remaining_quantity)),
         )
         if trade_qty <= 0:
-            break
+            continue
 
         trade_price = _execution_price(new_order, opp)
         total_cost = trade_price * trade_qty
 
-        # Identify buyer/seller orders for wallet effects
+        # Identify buyer/seller
         buy_order = new_order if new_order.type == models.OrderType.buy else opp
         sell_order = new_order if new_order.type == models.OrderType.sell else opp
 
-        if buy_order.user_id == sell_order.user_id:
-            continue
-
-        # Lock the two wallets we are about to mutate
+        # Lock wallets
         buyer_wallet = (
             db.query(models.Wallet)
             .filter(models.Wallet.user_id == buy_order.user_id)
@@ -140,23 +132,16 @@ def match_orders(db: Session, new_order: models.Order):
             .with_for_update()
             .one_or_none()
         )
+        if not buyer_wallet or not seller_wallet:
+            continue
 
-        # --- Sanity checks to avoid negatives (should be guaranteed by placement) ---
-        if buyer_wallet:
-            if Decimal(str(buyer_wallet.reserved_balance)) < total_cost:
-                # Not enough reserved USD — abort this match cleanly
-                break
-        else:
-            break  # cannot settle
+        # Sanity checks
+        if Decimal(str(buyer_wallet.reserved_balance)) < total_cost:
+            continue
+        if Decimal(str(seller_wallet.reserved_holdings)) < trade_qty:
+            continue
 
-        if seller_wallet:
-            if Decimal(str(seller_wallet.reserved_holdings)) < trade_qty:
-                # Not enough reserved asset — abort this match
-                break
-        else:
-            break  # cannot settle
-
-        # --- Create trade record ---
+        # --- Create trade ---
         trade = models.Trade(
             buy_order_id=buy_order.id,
             sell_order_id=sell_order.id,
@@ -165,27 +150,23 @@ def match_orders(db: Session, new_order: models.Order):
         )
         executed_trades.append(trade)
         db.add(trade)
-        db.flush()  # get trade.id
+        db.flush()
 
-        # --- Update order fills ---
+        # --- Update orders ---
         new_order.remaining_quantity = float(
             Decimal(str(new_order.remaining_quantity)) - trade_qty
         )
         opp.remaining_quantity = float(Decimal(str(opp.remaining_quantity)) - trade_qty)
-
         if new_order.remaining_quantity <= 0:
             new_order.status = models.StatusType.executed
         if opp.remaining_quantity <= 0:
             opp.status = models.StatusType.executed
 
-        # --- Wallet transfers ---
-        # Buyer pays USD (reserved_balance ↓), receives asset (holdings ↑)
+        # --- Wallet updates ---
         buyer_wallet.reserved_balance = float(
             Decimal(str(buyer_wallet.reserved_balance)) - total_cost
         )
         buyer_wallet.holdings = float(Decimal(str(buyer_wallet.holdings)) + trade_qty)
-
-        # Seller delivers asset (reserved_holdings ↓), receives USD (balance ↑)
         seller_wallet.reserved_holdings = float(
             Decimal(str(seller_wallet.reserved_holdings)) - trade_qty
         )
@@ -193,28 +174,25 @@ def match_orders(db: Session, new_order: models.Order):
 
         db.flush()
 
-        # Queue async broadcasts for after commit
+        # Queue broadcasts
         trade_broadcasts.append((trade.id, float(trade_price), float(trade_qty)))
-        wallet_broadcasts.append(
-            (
-                buyer_wallet.user_id,
-                buyer_wallet.balance,
-                buyer_wallet.reserved_balance,
-                buyer_wallet.holdings,
-                buyer_wallet.reserved_holdings,
-            )
-        )
-        wallet_broadcasts.append(
-            (
-                seller_wallet.user_id,
-                seller_wallet.balance,
-                seller_wallet.reserved_balance,
-                seller_wallet.holdings,
-                seller_wallet.reserved_holdings,
-            )
+        wallet_broadcasts.extend(
+            [
+                (
+                    buyer_wallet.user_id,
+                    buyer_wallet.balance,
+                    buyer_wallet.reserved_balance,
+                    buyer_wallet.holdings,
+                    buyer_wallet.reserved_holdings,
+                ),
+                (
+                    seller_wallet.user_id,
+                    seller_wallet.balance,
+                    seller_wallet.reserved_balance,
+                    seller_wallet.holdings,
+                    seller_wallet.reserved_holdings,
+                ),
+            ]
         )
 
-        # If new_order is done, stop matching
-        if new_order.status == models.StatusType.executed:
-            break
     return executed_trades

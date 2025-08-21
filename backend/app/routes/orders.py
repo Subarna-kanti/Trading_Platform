@@ -9,6 +9,7 @@ from app.db import data_model as models
 from app.schemas import order_schema as schemas
 from app.auth import get_current_user, get_current_admin
 from app.core.broadcasts import get_order_book_snapshot, broadcast_order_book
+from app.core.logs import logger
 
 router = APIRouter()
 
@@ -67,6 +68,7 @@ async def create_order(
 
         return db_order
     except Exception as e:
+        logger.error(f"❌ Error creating order: {e}", exc_info=True)
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
 
@@ -150,9 +152,9 @@ async def cancel_order(
         # ---- Broadcast updated order book ----
         order_book = get_order_book_snapshot(db)
         broadcast_order_book(order_book)
-
         return {"message": "Order cancelled successfully"}
 
     except Exception as e:
+        logger.error(f"❌ Error in cancelling order: {e}", exc_info=True)
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Error cancelling order: {str(e)}")
