@@ -9,6 +9,7 @@ COPY package.json package-lock.json ./
 RUN npm ci
 
 # Copy Vite config and source code
+COPY index.html ./
 COPY vite.config.js ./
 COPY src ./src
 COPY public ./public

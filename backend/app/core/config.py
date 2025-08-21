@@ -1,7 +1,9 @@
 # settings.py
-from pydantic import BaseSettings, Field
+from pydantic_settings import BaseSettings
+from pydantic import Field
 from typing import ClassVar
 from fastapi.security import OAuth2PasswordBearer
+
 
 class Settings(BaseSettings):
     # Secrets & tokens
@@ -18,5 +20,6 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"  # loads environment variables from .env
         env_file_encoding = "utf-8"
+
 
 settings = Settings()

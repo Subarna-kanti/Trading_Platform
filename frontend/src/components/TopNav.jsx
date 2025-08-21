@@ -64,7 +64,7 @@ export default function TopNav({ onLogout }) {
                 borderBottom: "1px solid #ddd",
             }}
         >
-            <div style={{ fontWeight: "bold" }}>Trading Platform</div>
+            <div style={{ fontWeight: "bold" }}>TradePulse</div>
 
             <div style={{ position: "relative" }} ref={menuRef}>
                 {/* Show username if available */}

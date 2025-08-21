@@ -55,4 +55,4 @@ def root():
 @app.get("/health")
 def health():
     logger.debug("Health check called")
-    return {"status": "ok"}
+    return {"status": "ok"} 
