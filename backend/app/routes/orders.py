@@ -110,7 +110,7 @@ def list_all_orders(
 # ---- Cancel an order (user/admin) ----
 @router.delete("/{order_id}")
 async def cancel_order(
-    order_id: int,
+    order_id: str,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):

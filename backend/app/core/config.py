@@ -1,22 +1,22 @@
-# app/core/config.py
+# settings.py
+from pydantic import BaseSettings, Field
 from typing import ClassVar
-from pydantic_settings import BaseSettings
 from fastapi.security import OAuth2PasswordBearer
 
-
 class Settings(BaseSettings):
-    SECRET_KEY: ClassVar[str] = (
-        "8fc693866aaeb82412dd02ed9a99dd9abe676acc77edbac0288d492326059883e76f22b1c7bcfeac4da55dddeae03fa28965ead7fcdd06f3ede0974688309d17"
-    )
+    # Secrets & tokens
+    SECRET_KEY: str = Field(..., env="SECRET_KEY")
     ALGORITHM: ClassVar[str] = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: ClassVar[int] = 60
-    REFRESH_TOKEN_EXPIRE_DAYS: ClassVar[int] = 7
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(60, env="ACCESS_TOKEN_EXPIRE_MINUTES")
+    REFRESH_TOKEN_EXPIRE_DAYS: int = Field(7, env="REFRESH_TOKEN_EXPIRE_DAYS")
+
+    # OAuth2 scheme (this can stay hardcoded)
     oauth2_scheme: ClassVar[OAuth2PasswordBearer] = OAuth2PasswordBearer(
         tokenUrl="/auth/login"
     )
 
     class Config:
-        env_file = ".env"
-
+        env_file = ".env"  # loads environment variables from .env
+        env_file_encoding = "utf-8"
 
 settings = Settings()

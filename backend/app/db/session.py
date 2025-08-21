@@ -8,7 +8,13 @@ from app.db.data_model import Base
 DATABASE_URL = "postgresql+psycopg2://trading_user:trade@localhost/trading_platform"
 
 # --- SQLAlchemy Engine ---
-engine = create_engine(DATABASE_URL, echo=True)
+engine = create_engine(
+    DATABASE_URL,
+    pool_size=10,  # default 5
+    max_overflow=20,  # default 10
+    pool_timeout=50,
+    echo=True,
+)
 
 # --- Session Factory ---
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
